@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backgroundmnu"
+version = "0.1.0"
+description = "A package for background cosmological analysis with signed neutrino mass."
+readme = "README.md"
+authors = [
+    {name = "Gabriel Lynch", email = "gplynch@ucdavis.edu"}
+]
+license = {file = "LICENSE.txt"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "numpy",
+    "scipy",
+    "cobaya",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/gplynch619/backgroundmnu"
+"Bug Tracker" = "https://github.com/gplynch619/backgroundmnu/issues"
+
+[tool.setuptools]
+packages = ["backgroundmnu"]
