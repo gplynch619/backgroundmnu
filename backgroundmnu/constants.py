@@ -14,3 +14,4 @@ class const:
     m_p = 9.382720813e8 # proton mass in eV
     T0 = 2.72548
     hfactor = 3.241e-18 # 100 km/s/Mpc in 1/s
+    sigma_T = 6.65246e-25 #cm^2

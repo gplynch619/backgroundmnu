@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import Mapping, Iterable, NamedTuple, Sequence, Union, Optional, Callable, Any
 
 import pyhyrec as pyhy
-
+from constants import const
 
 # Internal functions used for computing quantities
 # called from calculate above, or from other functions 
@@ -27,18 +27,18 @@ class Background():
             "Nmassive" : 1,
             "mnu" : 0.058, #eV
             "YHe"  : 0.245,
-            "T0" : _T0_, # K
+            "T0" : const.T0, # K
             "Tnu_massless": (4/11.)**(1/3),
             "Tnu_massive": 0.71611} #in units of T0}
         
         with open("./data/integral_tables.pkl", "rb") as f:
             int_tables = pkl.load(f)
 
-        # if self.with_dcdm:
-        #     with open("/home/gplynch/projects/cobaya/dcdm_densities_Gam470_Om00315.pkl", "rb") as f:
-        #         dcdm_densities = pkl.load(f)
-        #     self.omega_dcdm = CubicSpline(dcdm_densities["z"], dcdm_densities["omega_dcdm"])
-        #     self.omega_dr = CubicSpline(dcdm_densities["z"], dcdm_densities["omega_dr"])
+        if self.with_dcdm:
+            with open("/home/gplynch/projects/cobaya/dcdm_densities_Gam470_Om00315.pkl", "rb") as f:
+                dcdm_densities = pkl.load(f)
+            self.omega_dcdm = CubicSpline(dcdm_densities["z"], dcdm_densities["omega_dcdm"])
+            self.omega_dr = CubicSpline(dcdm_densities["z"], dcdm_densities["omega_dr"])
 
         self.rho_nu_integral_table = int_tables["rho"]
         self.p_nu_integral_table = int_tables["p"] 
@@ -93,7 +93,7 @@ class Background():
                 raise ValueError("{} is not a recognized parameter.".format(key))
 
     def rho_gamma(self,z):
-        return np.pi**2/15 * (_kb_**4 / (_hbar_*_c_)**3) / (100**3) * (self.T0)**4*(1+z)**4
+        return np.pi**2/15 * (const.kb**4 / (const.hbar*const.c_m)**3) / (100**3) * (self.T0)**4*(1+z)**4
 
     def rho_nu_massless(self, z, Neff = None): # energy density of massless (ultra-relativistic) neutrinos
         if Neff is not None:
@@ -107,8 +107,8 @@ class Background():
             return 0.0
         mi = self.mnu/self.Nmassive
         Tnu_K = self.Tnu_massive*self.T0
-        coeff1 = Tnu_K**4*(_kb_**4 / (_hbar_*_c_)**3) / (100**3) * (1+z)**4 / np.pi**2
-        coeff2 = mi**2 / (Tnu_K*_kb_*(1+z))**2
+        coeff1 = Tnu_K**4*(const.kb**4 / (const.hbar*const.c_m)**3) / (100**3) * (1+z)**4 / np.pi**2
+        coeff2 = mi**2 / (Tnu_K*const.kb*(1+z))**2
         if coeff2<self.coeff_switch_tabulate:
             integral = self.rho_nu_integral_table(coeff2)
         else:
@@ -148,19 +148,19 @@ class Background():
         return self.rho_gamma(z)+self.rho_nu_massless(z) #energy density of photons, ultra-relativisitc, and radiation-like component of massive neutrinos
 
     def omega_nu_massless(self, z):
-        return self.rho_nu_massless(z)/_rho100_
+        return self.rho_nu_massless(z)/const.rho100
     
     # def omega_nu_r(self,z):
     #     return self.rho_nu_r(z)/_rho100_
     
     def omega_nu_massive(self,z):
-        return self.rho_nu_massive(z)/_rho100_
+        return self.rho_nu_massive(z)/const.rho100
     
     def omega_gamma(self, z):
-        return self.rho_gamma(z)/_rho100_
+        return self.rho_gamma(z)/const.rho100
     
     def omega_r(self,z):
-        return self.rho_r(z)/_rho100_
+        return self.rho_r(z)/const.rho100
 
     def omega_nu(self, z):
 
@@ -178,8 +178,7 @@ class Background():
     #     return self.omega_b(z) + self.omega_cdm(z) + sign*self.omega_nu_m(z)
 
     def _Hubble(self,z):
-        factor = 3.241e-18 # 100 km/s/Mpc in 1/s
-
+        
         h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.omega_nu(z) + self.omega_de
         if self.with_dcdm:
             h2 = h2 + self.omega_dcdm(z) + self.omega_dr(z) - self.omega_dcdm(0) - self.omega_dr(0)
@@ -187,7 +186,7 @@ class Background():
         #hz = np.sqrt(h2)*factor/_cMpc_
         #massless_hz = self.massless_Hubble(z)
         hfinal = massless_h2 + np.sign(self.mnu)*np.abs(h2 - massless_h2)
-        return factor*np.sqrt(hfinal)/_cMpc_# in 1/Mpc
+        return const.hfactor*np.sqrt(hfinal)/_cMpc_# in 1/Mpc
 
     def Hubble(self, z):
         if z<self.z_switch_tabulate:
@@ -198,7 +197,7 @@ class Background():
     def massless_Hubble(self, z): # hubble factor assuming 3.044 massless neutrinos, the given omega_b and omega_c, to be used in calculations except for DA
         h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.rho_nu_massless(z, 3.044)/_rho100_ + self.omega_de
 
-        return 3.241e-18*np.sqrt(h2)/_cMpc_ # in 1/Mpc
+        return const.hfactor*np.sqrt(h2)/const.c_Mpc # in 1/Mpc
 
     def R(self, z):
         return ((3*self.omega_b0)/(4*self.omega_gamma(0)))*(1+z)**-1
@@ -235,7 +234,7 @@ class Background():
         dz = zmax/Nz
         z = np.arange(start=zmin, stop=zmax, step=dz) # this matches the spacing that HYREC assumes 
 
-        hub = np.array([self.Hubble(zp) for zp in z])*_cMpc_
+        hub = np.array([self.Hubble(zp) for zp in z])*const.c_Mpc
         #hub = np.array([self.massless_Hubble(zp) for zp in z])*_cMpc_
         z, xe, _ = pyhy.call_run_hyrec_with_hubble(pyhy.HyRecCosmoParams()(), pyhy.HyRecInjectionParams()(), hub.flatten())
 
@@ -247,11 +246,10 @@ class Background():
 
 
     def hydrogen_density(self,z): #n_H(z) in 1/cm^3
-        return self.omega_b0*_rho100_*(1-self.YHe)/_m_H_*(1+z)**3
+        return self.omega_b0*const.rho100*(1-self.YHe)/const.m_H*(1+z)**3
 
     def Thomson_scattering_rate(self, z):
-        sigma_T = 6.65246e-25 #cm^2
-        return self.Xe(z)*self.hydrogen_density(z)*sigma_T * _Mpc_over_m_*100 #numerical factor is to conver Hubble from 1/Mpc to 1/cm
+        return self.Xe(z)*self.hydrogen_density(z)*const.sigma_T * const.Mpc_over_m*100 #numerical factor is to conver Hubble from 1/Mpc to 1/cm
     
     def optical_depth(self, z_end=2000):
         integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))
@@ -296,11 +294,11 @@ class ReionizationModel:
         #_mHe_to_mH_ = 4.0
 
         #xe_after_reio: H + singly ionized He (checked before that denominator is non-zero) */
-        self.xe_after_reio = 1. + YHe/(_mHe_to_mH_*(1.-YHe))
+        self.xe_after_reio = 1. + YHe/(const.mHe_to_mH*(1.-YHe))
 
         self.reio_width = delta_z_reio
         self.reio_exponent = 1.5
-        self.helium_fullreio_fraction = YHe/(_mHe_to_mH_*(1.-YHe))
+        self.helium_fullreio_fraction = YHe/(const.mHe_to_mH*(1.-YHe))
         self.helium_fullreio_redshift = 3.5
         self.helium_fullreio_width = 0.5
 
