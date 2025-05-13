@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d, CubicSpline
 from scipy.optimize import fsolve
 import pickle as pkl
 from copy import deepcopy
-from typing import Mapping, Iterable, NamedTuple, Sequence, Union, Optional, Callable, Any
+from typing import Mapping, Iterable, NamedTuple, Sequence, Union, Optional, Callable
 
 import pyhyrec as pyhy
 from constants import const
@@ -182,11 +182,11 @@ class Background():
         h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.omega_nu(z) + self.omega_de
         if self.with_dcdm:
             h2 = h2 + self.omega_dcdm(z) + self.omega_dr(z) - self.omega_dcdm(0) - self.omega_dr(0)
-        massless_h2 = (self.massless_Hubble(z)*_cMpc_/factor)**2
+        massless_h2 = (self.massless_Hubble(z)*const.c_Mpc/const.hfactor)**2
         #hz = np.sqrt(h2)*factor/_cMpc_
         #massless_hz = self.massless_Hubble(z)
         hfinal = massless_h2 + np.sign(self.mnu)*np.abs(h2 - massless_h2)
-        return const.hfactor*np.sqrt(hfinal)/_cMpc_# in 1/Mpc
+        return const.hfactor*np.sqrt(hfinal)/const.c_Mpc# in 1/Mpc
 
     def Hubble(self, z):
         if z<self.z_switch_tabulate:
@@ -195,7 +195,7 @@ class Background():
             return self._Hubble(z)
 
     def massless_Hubble(self, z): # hubble factor assuming 3.044 massless neutrinos, the given omega_b and omega_c, to be used in calculations except for DA
-        h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.rho_nu_massless(z, 3.044)/_rho100_ + self.omega_de
+        h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.rho_nu_massless(z, 3.044)/const.rho100 + self.omega_de
 
         return const.hfactor*np.sqrt(h2)/const.c_Mpc # in 1/Mpc
 
@@ -294,11 +294,11 @@ class ReionizationModel:
         #_mHe_to_mH_ = 4.0
 
         #xe_after_reio: H + singly ionized He (checked before that denominator is non-zero) */
-        self.xe_after_reio = 1. + YHe/(const.mHe_to_mH*(1.-YHe))
+        self.xe_after_reio = 1. + YHe/(_mHe_to_mH_*(1.-YHe))
 
         self.reio_width = delta_z_reio
         self.reio_exponent = 1.5
-        self.helium_fullreio_fraction = YHe/(const.mHe_to_mH*(1.-YHe))
+        self.helium_fullreio_fraction = YHe/(_mHe_to_mH_*(1.-YHe))
         self.helium_fullreio_redshift = 3.5
         self.helium_fullreio_width = 0.5
 
