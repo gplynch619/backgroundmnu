@@ -18,7 +18,8 @@ class MnuModel(Protocol):
 class SymmetricSignedMass(MnuModel):
 
     def calculate_hubble(self, background, z):
-        h2 = background.omega_cdm(z) + background.omega_b(z) + background.omega_gamma(z) +  background.omega_nu_massless(z) + background.omega_nu_massive(z)  + background.omega_de(z)
+        h2 = background.omega_cdm(z) + background.omega_b(z) + background.omega_gamma(z) + \
+             background.omega_nu_massless(z) + background.omega_nu_massive(z)  + background.omega_de(z)
 
         massless_h2 = (background.massless_Hubble(z)*con.c_Mpc/con.hfactor)**2
 
@@ -30,16 +31,14 @@ class SubtractRestMass(MnuModel):
     def calculate_hubble(self, background, z):
         sign = np.sign(background.mnu)
 
-        rho,p = self.nu_density_and_pressure(background, z)
+        rho = background.omega_nu_massive(z)
+        p = background.p_nu_massive(z)
 
         omega_m = background.omega_b(z) + background.omega_cdm(z) + sign*(rho - 3*p)
         omega_r = background.omega_gamma(z) + background.omega_nu_massless(z) + 3*p
         h2 = omega_m + omega_r + background.omega_de(z)
 
         return con.hfactor*np.sqrt(h2)/con.c_Mpc# in 1/Mpc
-
-    def nu_density_and_pressure(self, background, z):
-        return background.omega_nu_massive(z), background.p_nu_massive(z)
 
 class ZeroMass(MnuModel):
 
@@ -95,21 +94,17 @@ class Background():
             else:
                 raise ValueError("{} is not a recognized parameter.".format(key))
         
+        if self._params["mnu"] == 0.0: 
+            self._params["Nmassive"] = 0
+        
         for key, value in self._params.items():
             self.__dict__[key] = value
 
     def setup(self):
 
-        self.with_reio = False # for now, no reionization
-
-        self.z_switch_tabulate = 3000
         self.coeff_switch_tabulate = 1e5
 
         self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4/11)**(1/3))**4
-
-        zgrid = np.linspace(0, self.z_switch_tabulate, 10000)
-        Hz = [self._Hubble(z) for z in zgrid]
-        self.Hubble_table = CubicSpline(zgrid, Hz)
 
         self.calculate_recombination()
         self.calculate_optical_depths()
@@ -154,21 +149,35 @@ class Background():
         Tnu_K = self.Tnu_massive*self.T0
         coeff1 = Tnu_K**4*(con.kb**4 / (con.hbar*con.c_m)**3) / (100**3) * (1+z)**4 / np.pi**2
         coeff2 = mi**2 / (Tnu_K*con.kb*(1+z))**2
-        if coeff2<self.coeff_switch_tabulate:
-            integral = self.rho_nu_integral_table(coeff2)
+
+        def get_integral(c2):
+            if c2<self.coeff_switch_tabulate:
+                return self.rho_nu_integral_table(c2)
+            else:
+                return scipy.integrate.quad(lambda x: x**2/(np.exp(x)+1)*np.sqrt(x**2 + c2), 0, np.inf, epsabs=1e-11)[0]
+        
+        if np.isscalar(coeff2):
+            integral = get_integral(coeff2)
         else:
-            integral = scipy.integrate.quad(lambda x: x**2/(np.exp(x)+1)*np.sqrt(x**2 + coeff2), 0, np.inf, epsabs=1e-11)[0]
+            integral = np.vectorize(get_integral)(coeff2)
         return coeff1*self.Nmassive*integral/con.rho100
 
     def p_nu_massive(self, z): # pressure of massive neutrinos
         Tnu_K = self.Tnu_massive*self.T0
         coeff1 = Tnu_K**4*(con.kb**4 / (con.hbar*con.c_m)**3) / (100**3) * (1+z)**4 / np.pi**2
         coeff2 = self.mnu**2 / (Tnu_K*con.kb*(1+z))**2
-        if coeff2<self.coeff_switch_tabulate:
-            integral = self.p_nu_integral_table(coeff2)
+
+        def get_integral(c2):
+            if c2<self.coeff_switch_tabulate:
+                return self.p_nu_integral_table(c2)
+            else:
+                return scipy.integrate.quad(lambda x: (x**4/(3*np.sqrt(x**2 + c2)))*1/(np.exp(x)+1) , 0, np.inf, epsabs=1e-11)[0]
+
+        if np.isscalar(coeff2):
+            integral = get_integral(coeff2)
         else:
-            integral = scipy.integrate.quad(lambda x: (x**4/(3*np.sqrt(x**2 + coeff2)))*1/(np.exp(x)+1) , 0, np.inf, epsabs=1e-11)[0]
-        return coeff1*integral/con.rho100
+            integral = np.vectorize(get_integral)(coeff2)
+        return coeff1*self.Nmassive*integral/con.rho100
 
     def omega_b(self, z):
         return self.omega_b0*(1+z)**3
@@ -182,15 +191,9 @@ class Background():
     #########################################################
     # Distances
     #########################################################
-    def _Hubble(self,z):
+    def Hubble(self,z):
         """Calculate Hubble parameter at redshift z. Implementation depends on the model for signed neutrino mass, which are implemented in subclasses."""
         return self.mnu_model.calculate_hubble(self, z)
-
-    def Hubble(self, z):
-        if z<self.z_switch_tabulate:
-            return self.Hubble_table(z)
-        else:
-            return self._Hubble(z)
 
     def massless_Hubble(self, z): # hubble factor assuming 3.044 massless neutrinos, the given omega_b and omega_c, to be used in calculations except for DA
         h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.omega_nu_massless(z, 3.044) + self.omega_de(z)
