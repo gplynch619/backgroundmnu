@@ -41,7 +41,7 @@ class BackgroundLikelihood(Likelihood):
         omega_c = params_values['omega_cdm0']
         v = np.array([omega_b, omega_c])
         if self.mode == "3p":
-            v.append(100*self.provider.get_param("theta_star"))
+            v = np.append(v, 100*self.provider.get_param("theta_star"))
         diff_vector = (v-self.mean)
         chi2 = np.dot(diff_vector, np.matmul(self.inv_cov, diff_vector))
         return -chi2 / 2
