@@ -1,11 +1,17 @@
-# Local
+from typing import Dict, List, Optional, Sequence, Union, Mapping, Any, NamedTuple, Callable
+
+import numpy as np
+from copy import deepcopy
+
 from cobaya.theory import Theory
 from cobaya.tools import Pool1D, Pool2D, PoolND, combine_1d
 from cobaya.log import LoggedError
+from cobaya.typing import InfoDict
 
-from constants import const
+from .Background import Background
+from .constants import con
 
-H_units_conv_factor = {"1/Mpc": 1, "km/s/Mpc": const.c_km}
+H_units_conv_factor = {"1/Mpc": 1, "km/s/Mpc": con.c_km}
 
 class Collector(NamedTuple):
     method: str
@@ -22,17 +28,30 @@ class BackgroundTheory(Theory):
 # Functions needed or used by cobaya
 #########################################################
 
-    params = {
-        "omega_de": None,
-        "omega_b0": None,
-        "omega_cdm0": None,
-        "mnu": None
+    extra_args: InfoDict
+    _defaults = {
+        "omega_de0": 0.3106861654538187,
+        "omega_b0": 0.02237,
+        "omega_cdm0": 0.1200,
+        "mnu": 0.058,
+        "w0": -1.0,
+        "wa": 0.0,
+        "Nmassive": 1,
+        "YHe": 0.245,
+        "T0": con.T0,
+        "Tnu_massless": (4/11.)**(1/3),
+        "Tnu_massive": 0.71611,
+        "mnu_model": "symmetric",
+        "with_reio": False
     }
+
+    # Define acceptable model values
+    MNU_MODELS = ["symmetric", "subtract_rest_mass", "massless"]
 
     def initialize(self):
         """called from __init__ to initialize"""
         # List of all possible parameters
-        self.all_parameters = ["omega_de", "omega_b0", "omega_cdm0", "mnu", "Nmassive", "YHe", "T0", "Tnu_massless", "Tnu_massive"]
+        self.all_parameters = list(self._defaults.keys())
         
         self.collectors = {}
         self._must_provide = {}
@@ -43,6 +62,32 @@ class BackgroundTheory(Theory):
             for k, v in self.extra_args.items():
                 if k in self.all_parameters:
                     self.input_parameters[k] = v
+        
+        # Set default neutrino model if not specified
+        if "mnu_model" not in self.input_parameters:
+            self.input_parameters["mnu_model"] = "symmetric"
+            
+        # Validate mnu_model
+        if self.input_parameters["mnu_model"] not in self.MNU_MODELS:
+            raise LoggedError(
+                self.log, 
+                f"Invalid mnu_model: '{self.input_parameters['mnu_model']}'. "
+                f"Must be one of {self.MNU_MODELS}"
+            )
+
+    def get_allow_agnostic(self):
+        return True
+
+    def get_can_support_params(self):
+        return self.all_parameters
+    
+    def get_requirements(self):
+        """
+        Return the requirements dictionary for optional parameters.
+        This allows the user to specify only the parameters they want to vary.
+        """
+        # Return empty dict to indicate no hard requirements
+        return {}
 
     def must_provide(self, **requirements):
         # Computed quantities required by the likelihood
@@ -51,9 +96,7 @@ class BackgroundTheory(Theory):
         self._must_provide = self._must_provide or dict.fromkeys(self.output_params or [])
 
         for k, v in requirements.items():
-            if k in {"Hubble", "Omega_b", "Omega_cdm", "Omega_nu_massive",
-                       "angular_diameter_distance", "comoving_radial_distance",
-                       "sigma8_z", "fsigma8"}:
+            if k in {"Hubble", "angular_diameter_distance"}:
                 if k not in self._must_provide:
                     self._must_provide[k] = {}
                 if not isinstance(v, Mapping) or "z" not in v:
@@ -79,23 +122,21 @@ class BackgroundTheory(Theory):
         return ['Hubble', "angular_diameter_distance"]
 
     def get_can_provide_params(self):
-        return ['zstar', 'zdrag', 'rdrag', 'rstar', 'theta_star', "h"]
+        return ['zstar', 'zdrag', 'rdrag', 'rstar', 'theta_star', "h", "w0", "wa"]
     
     def calculate(self, state, want_derived=True, **params_values_dict):
-        params = {}
+        params = self.input_parameters.copy()
         
-        # Add sampled parameters
-        for param in ["omega_de", "omega_b0", "omega_cdm0", "mnu"]:
+        # Add sampled/input parameters, which override any defaults
+        for param in self.all_parameters:
             if param in params_values_dict:
                 params[param] = params_values_dict[param]
-        
-        # Add parameters from extra_args
-        if hasattr(self, 'extra_args') and self.extra_args:
-            for k, v in self.extra_args.items():
-                if k in self.all_parameters and k not in params:
-                    params[k] = v
 
-        self.Background = Background(self.input_parameters)
+        try:
+            self.Background = Background(params)
+        except Exception as e:
+            print(f"Error creating Background: {e}")
+            return False
 
         for product, collector in self.collectors.items():
             # Special case: sigma8 needs H0, which cannot be known beforehand:
@@ -154,13 +195,22 @@ class BackgroundTheory(Theory):
                 state[product] = collector.post(*state[product])
     
         if want_derived:
-            state['derived'] = {'theta_star': self.Background.theta_star(),
-                                "zdrag": self.Background.z_drag, 
-                                "z_star": self.Background.z_star, 
-                                "rdrag": self.Background.sound_horizon(self.Background.z_drag), 
-                                "rstar": self.Background.sound_horizon(self.Background.z_drag),
-                                "h": self.Background.h}
-    
+            derived_params = {
+                'theta_star': self.Background.theta_star(),
+                'zdrag': self.Background.z_drag, 
+                'z_star': self.Background.z_star, 
+                'rdrag': self.Background.sound_horizon(self.Background.z_drag), 
+                'rstar': self.Background.sound_horizon(self.Background.z_star),
+                'h': self.Background.h()
+            }
+            
+            # Add w0, wa as derived parameters if they weren't sampled
+            if "w0" not in params_values_dict and hasattr(self.Background, "w0"):
+                derived_params["w0"] = self.Background.w0
+            if "wa" not in params_values_dict and hasattr(self.Background, "wa"):
+                derived_params["wa"] = self.Background.wa
+                
+            state['derived'] = derived_params
 
     def get_Hubble(self, z, units="km/s/Mpc"):
         try:

@@ -1,4 +1,4 @@
-class const:
+class con:
     G = 6.674e-11 #N m^2 / kg^2
     c_m = 2.99792458e8 # m/s
     c_km = 2.99792458e5 # km/s

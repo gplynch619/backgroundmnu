@@ -6,4 +6,8 @@ __version__ = "0.1.0"
 
 # Import main classes/functions to make them available at the package level
 from .BackgroundLikelihood import *
-from .BackgroundTheory import *
+from .BackgroundTheory import BackgroundTheory
+from .Background import *
+
+# # Make BackgroundTheory discoverable by Cobaya
+theory = {"backgroundmnu.BackgroundTheory": BackgroundTheory}

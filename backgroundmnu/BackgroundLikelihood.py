@@ -2,22 +2,25 @@ from cobaya.likelihood import Likelihood
 import numpy as np
 import os
 import pickle as pkl
-
+from importlib.resources import files
 
 class BackgroundLikelihood(Likelihood):
 
     input_params = {"omega_b0": None, "omega_cdm0": None, }
-    default_data_path = "./data/reduced_3p_likelihood_lcdm.pkl"
+    data_path = os.path.join(files("backgroundmnu"), "data")
+    data_file = "plikHM_TTTEEE_lowl_lowE"
+
 
     def initialize(self, **params_values):
         
-        # if self.data_path is None:
-        self.data_path = os.path.abspath(getattr(self, "data_path", self.default_data_path))
+        # self.data_file = os.path.abspath(getattr(self, "data_file", self.data_file))
+        self.data_file_path = os.path.join(self.data_path, f"{self.data_file}.pkl")
+        if not os.path.exists(self.data_file_path):
+            raise FileNotFoundError(f"Data file not found at {self.data_file_path}")
 
-        if not os.path.exists(self.data_path):
-            raise FileNotFoundError(f"Data file not found at {self.data_path}")
+        print("Loading data from: ", self.data_file_path)
 
-        with open(self.data_path, "rb") as f:
+        with open(self.data_file_path, "rb") as f:
             loaded = pkl.load(f)
         
         self.mean = loaded["mean"]
