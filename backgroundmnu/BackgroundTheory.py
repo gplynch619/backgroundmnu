@@ -66,7 +66,6 @@ class BackgroundTheory(Theory):
         # Set default neutrino model if not specified
         if "mnu_model" not in self.input_parameters:
             self.input_parameters["mnu_model"] = "symmetric"
-            
         # Validate mnu_model
         if self.input_parameters["mnu_model"] not in self.MNU_MODELS:
             raise LoggedError(

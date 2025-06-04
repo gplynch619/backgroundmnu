@@ -22,8 +22,8 @@ class SymmetricSignedMass(MnuModel):
              background.omega_nu_massless(z) + background.omega_nu_massive(z)  + background.omega_de(z)
 
         massless_h2 = (background.massless_Hubble(z)*con.c_Mpc/con.hfactor)**2
+        hfinal = massless_h2 + np.sign(background.mnu)*(h2 - massless_h2)
 
-        hfinal = massless_h2 + np.sign(background.mnu)*np.abs(h2 - massless_h2)
         return con.hfactor*np.sqrt(hfinal)/con.c_Mpc# in 1/Mpc
 
 class SubtractRestMass(MnuModel):
@@ -104,7 +104,7 @@ class Background():
 
         self.coeff_switch_tabulate = 1e5
 
-        self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4/11)**(1/3))**4
+        self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4./11)**(1/3))**4
 
         self.calculate_recombination()
         self.calculate_optical_depths()
@@ -253,13 +253,13 @@ class Background():
         return self.Xe(z)*self.hydrogen_density(z)*con.sigma_T * con.Mpc_over_m*100 #numerical factor is to conver Hubble from 1/Mpc to 1/cm
     
     def optical_depth(self, z_end=2000):
-        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))
-        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))
+        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))
+        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))
         return scipy.integrate.solve_ivp(integrand, (0,z_end), [0], t_eval=np.linspace(0,z_end,int(z_end)))
     
     def baryon_optical_depth(self, z_end=2000):
-        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))/self.R(z)
-        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))/self.R(z)
+        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))/self.R(z)
+        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))/self.R(z)
         return scipy.integrate.solve_ivp(integrand, (0,z_end), [0], t_eval=np.linspace(0,z_end,int(z_end)))
 
     def theta_star(self):
