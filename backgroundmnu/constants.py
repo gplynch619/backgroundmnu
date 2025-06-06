@@ -15,3 +15,4 @@ class con:
     T0 = 2.72548
     hfactor = 3.241e-18 # 100 km/s/Mpc in 1/s
     sigma_T = 6.65246e-25 #cm^2
+    inv_Gyr_to_inv_s = 3.171e-17 # 1/Gyr in 1/s

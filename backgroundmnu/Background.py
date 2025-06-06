@@ -19,11 +19,12 @@ class SymmetricSignedMass(MnuModel):
 
     def calculate_hubble(self, background, z):
         h2 = background.omega_cdm(z) + background.omega_b(z) + background.omega_gamma(z) + \
-             background.omega_nu_massless(z) + background.omega_nu_massive(z)  + background.omega_de(z)
+             background.omega_nu_massless(z) + background.omega_nu_massive(z)  + background.omega_de(z) + \
+             background.omega_ddm(z) + background.omega_dr(z)
 
         massless_h2 = (background.massless_Hubble(z)*con.c_Mpc/con.hfactor)**2
 
-        hfinal = massless_h2 + np.sign(background.mnu)*np.abs(h2 - massless_h2)
+        hfinal = massless_h2 + np.sign(background.mnu)*(h2 - massless_h2)
         return con.hfactor*np.sqrt(hfinal)/con.c_Mpc# in 1/Mpc
 
 class SubtractRestMass(MnuModel):
@@ -34,8 +35,8 @@ class SubtractRestMass(MnuModel):
         rho = background.omega_nu_massive(z)
         p = background.p_nu_massive(z)
 
-        omega_m = background.omega_b(z) + background.omega_cdm(z) + sign*(rho - 3*p)
-        omega_r = background.omega_gamma(z) + background.omega_nu_massless(z) + 3*p
+        omega_m = background.omega_b(z) + background.omega_cdm(z) + sign*(rho - 3*p) + background.omega_ddm(z)
+        omega_r = background.omega_gamma(z) + background.omega_nu_massless(z) + 3*p + background.omega_dr(z)
         h2 = omega_m + omega_r + background.omega_de(z)
 
         return con.hfactor*np.sqrt(h2)/con.c_Mpc# in 1/Mpc
@@ -61,6 +62,8 @@ class Background():
             "Tnu_massive": 0.71611,
             "w0" : -1,
             "wa" : 0,
+            "omega_ddm_ini": 0,
+            "gamma_ddm": 0,
             "mnu_model": "symmetric",
             "with_reio": False} #in units of T0
         
@@ -106,6 +109,7 @@ class Background():
 
         self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4/11)**(1/3))**4
 
+        self.solve_ddm()
         self.calculate_recombination()
         self.calculate_optical_depths()
 
@@ -128,6 +132,44 @@ class Background():
         tau_baryon_int = interp1d(tau_baryon.t, tau_baryon.y[0])
         self.z_drag = fsolve(lambda z: tau_baryon_int(z)-1, 1080)[0]
 
+    #########################################################
+    # Decaying dark matter
+    #########################################################
+
+    def solve_ddm(self):
+        if self.omega_ddm_ini == 0:
+            self._omega_ddm = lambda z: 0.0
+            self._omega_dr = lambda z: 0.0
+            return
+
+        gamma = self.gamma_ddm*con.inv_Gyr_to_inv_s #gamma in 1/s
+        def ddm_derivs(t, y):
+            omega_ddm = y[0]
+            omega_dr = y[1]
+            a = np.exp(t)
+            z = 1/a - 1
+
+            self._omega_ddm = lambda z: omega_ddm
+            self._omega_dr = lambda z: omega_dr
+            deriv1 = -3*omega_ddm - (gamma/(self.Hubble(z)*con.c_Mpc))*omega_ddm
+            deriv2 = -4*omega_dr + (gamma/(self.Hubble(z)*con.c_Mpc))*omega_ddm
+
+            return np.array([deriv1, deriv2])
+        a_ini = 1e-8
+        z_ini = 1/a_ini - 1
+        solution = scipy.integrate.solve_ivp(ddm_derivs, (np.log(a_ini), 0), [self.omega_ddm_ini*(1+z_ini)**3, 0.0], t_eval=np.linspace(np.log(a_ini), 0, 10000))
+        agrid = np.exp(solution.t)
+        zgrid = 1/agrid -1 
+        self._omega_ddm = interp1d(zgrid[::-1], solution.y[0][::-1], fill_value="extrapolate")
+        self._omega_dr = interp1d(zgrid[::-1], solution.y[1][::-1], fill_value="extrapolate")
+        return
+    
+    def omega_ddm(self, z):
+        return self._omega_ddm(z)
+
+    def omega_dr(self, z):
+        return self._omega_dr(z)
+    
     #########################################################
     # Energy densities for different species
     #########################################################
@@ -185,6 +227,9 @@ class Background():
     def omega_cdm(self, z):
         return self.omega_cdm0*(1+z)**3    
 
+    def omega_dm(self, z):
+        return self.omega_ddm(z) + self.omega_dr(z)
+
     def omega_de(self, z):
         a = 1/(1+z)
         return self.omega_de0*a**(-3*(1+self.w0+self.wa))*np.exp(-3*self.wa*(1-a))
@@ -196,7 +241,7 @@ class Background():
         return self.mnu_model.calculate_hubble(self, z)
 
     def massless_Hubble(self, z): # hubble factor assuming 3.044 massless neutrinos, the given omega_b and omega_c, to be used in calculations except for DA
-        h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.omega_nu_massless(z, 3.044) + self.omega_de(z)
+        h2 = self.omega_cdm(z) + self.omega_b(z) + self.omega_gamma(z) + self.omega_nu_massless(z, 3.044) + self.omega_de(z) + self.omega_ddm(z) + self.omega_dr(z)
 
         return con.hfactor*np.sqrt(h2)/con.c_Mpc # in 1/Mpc
 
@@ -253,13 +298,13 @@ class Background():
         return self.Xe(z)*self.hydrogen_density(z)*con.sigma_T * con.Mpc_over_m*100 #numerical factor is to conver Hubble from 1/Mpc to 1/cm
     
     def optical_depth(self, z_end=2000):
-        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))
-        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))
+        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))
+        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))
         return scipy.integrate.solve_ivp(integrand, (0,z_end), [0], t_eval=np.linspace(0,z_end,int(z_end)))
     
     def baryon_optical_depth(self, z_end=2000):
-        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))/self.R(z)
-        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))/self.R(z)
+        integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.Hubble(z)*(1+z))/self.R(z)
+        #integrand = lambda z,y: self.Thomson_scattering_rate(z)/(self.massless_Hubble(z)*(1+z))/self.R(z)
         return scipy.integrate.solve_ivp(integrand, (0,z_end), [0], t_eval=np.linspace(0,z_end,int(z_end)))
 
     def theta_star(self):
