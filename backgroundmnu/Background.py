@@ -23,8 +23,8 @@ class SymmetricSignedMass(MnuModel):
              background.omega_ddm(z) + background.omega_dr(z)
 
         massless_h2 = (background.massless_Hubble(z)*con.c_Mpc/con.hfactor)**2
-
         hfinal = massless_h2 + np.sign(background.mnu)*(h2 - massless_h2)
+
         return con.hfactor*np.sqrt(hfinal)/con.c_Mpc# in 1/Mpc
 
 class SubtractRestMass(MnuModel):
@@ -107,7 +107,7 @@ class Background():
 
         self.coeff_switch_tabulate = 1e5
 
-        self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4/11)**(1/3))**4
+        self.Neff = 3.044 - self.Nmassive*(self.Tnu_massive/(4./11)**(1/3))**4
 
         self.solve_ddm()
         self.calculate_recombination()
