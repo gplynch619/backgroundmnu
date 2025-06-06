@@ -6,7 +6,7 @@ from importlib.resources import files
 
 class BackgroundLikelihood(Likelihood):
 
-    input_params = {"omega_b0": None, "omega_cdm0": None, }
+    input_params = {"omega_b0": None }
     data_path = os.path.join(files("backgroundmnu"), "data")
     data_file = "plikHM_TTTEEE_lowl_lowE"
     mode = "3p"
@@ -32,13 +32,13 @@ class BackgroundLikelihood(Likelihood):
 
     def get_requirements(self):
         if self.mode == "3p":   
-            return {"theta_star": None}
+            return {"omega_dm": None, "theta_star": None}
         elif self.mode == "2p":
-            return {}
+            return {"omega_dm": None}
     
     def logp(self, **params_values):
         omega_b = params_values['omega_b0']
-        omega_c = params_values['omega_cdm0']
+        omega_c = self.provider.get_param("omega_dm")
         v = np.array([omega_b, omega_c])
         if self.mode == "3p":
             v = np.append(v, 100*self.provider.get_param("theta_star"))

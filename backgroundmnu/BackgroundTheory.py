@@ -36,6 +36,8 @@ class BackgroundTheory(Theory):
         "mnu": 0.058,
         "w0": -1.0,
         "wa": 0.0,
+        "omega_ddm_ini": 0,
+        "gamma_ddm": 0,
         "Nmassive": 1,
         "YHe": 0.245,
         "T0": con.T0,
@@ -121,7 +123,7 @@ class BackgroundTheory(Theory):
         return ['Hubble', "angular_diameter_distance"]
 
     def get_can_provide_params(self):
-        return ['zstar', 'zdrag', 'rdrag', 'rstar', 'theta_star', "h", "w0", "wa"]
+        return ['zstar', 'zdrag', 'rdrag', 'rstar', 'theta_star', "h", "w0", "wa", "omega_dm"]
     
     def calculate(self, state, want_derived=True, **params_values_dict):
         params = self.input_parameters.copy()
@@ -194,13 +196,15 @@ class BackgroundTheory(Theory):
                 state[product] = collector.post(*state[product])
     
         if want_derived:
+            omega_dm = self.Background.omega_dm(self.Background.z_star)/(1+self.Background.z_star)**3
             derived_params = {
                 'theta_star': self.Background.theta_star(),
                 'zdrag': self.Background.z_drag, 
                 'z_star': self.Background.z_star, 
                 'rdrag': self.Background.sound_horizon(self.Background.z_drag), 
                 'rstar': self.Background.sound_horizon(self.Background.z_star),
-                'h': self.Background.h()
+                'h': self.Background.h(),
+                "omega_dm": omega_dm
             }
             
             # Add w0, wa as derived parameters if they weren't sampled
