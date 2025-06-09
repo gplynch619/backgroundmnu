@@ -228,7 +228,7 @@ class Background():
         return self.omega_cdm0*(1+z)**3    
 
     def omega_dm(self, z):
-        return self.omega_ddm(z) + self.omega_dr(z)
+        return self.omega_ddm(z) + self.omega_cdm(z)
 
     def omega_de(self, z):
         a = 1/(1+z)
